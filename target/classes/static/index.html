@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="id"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Perpustakaan Digital | Ajukan Peminjaman Buku</title>
+<style>
+body{font-family:system-ui,sans-serif;max-width:820px;margin:24px auto;padding:0 16px;color:#1f2937}
+h1{font-size:20px}h2{font-size:15px;margin:18px 0 6px}
+.box{border:1px solid #d1d5db;border-radius:8px;padding:12px;margin-bottom:10px}
+.ok{background:#ecfdf5;border-color:#10b981}.err{background:#fef2f2;border-color:#ef4444}
+table{width:100%;border-collapse:collapse}td,th{padding:6px;border-bottom:1px solid #e5e7eb;text-align:left;font-size:14px}
+button{padding:8px 16px;border-radius:6px;border:0;background:#2563eb;color:#fff;cursor:pointer}
+button:disabled{background:#9ca3af;cursor:not-allowed}.sec{background:#e5e7eb;color:#111}
+</style></head><body>
+<h1>Perpustakaan Digital | Ajukan Peminjaman Buku</h1>
+<div id="banner" class="box">Pilih akun uji, cari buku, lalu pilih satu buku.</div>
+<div id="main">
+<h2>Akun (simulasi login)</h2>
+<select id="akun" onchange="pilihBuku(kode)">
+ <option value="AGT-2023-0456">AGT-2023-0456 - Aktif, 3 dari 5 (Layar A)</option>
+ <option value="AGT-2023-0789">AGT-2023-0789 - Aktif, 5 dari 5 (Layar B)</option>
+ <option value="AGT-2022-0100">AGT-2022-0100 - Nonaktif (Layar C)</option>
+</select>
+<h2>1. Cari dan Pilih Buku</h2>
+<input id="q" placeholder="Cari berdasarkan judul atau penulis" size="40"> <button onclick="cari()">Cari</button>
+<table><thead><tr><th></th><th>Kode</th><th>Judul</th><th>Penulis</th><th>Status</th></tr></thead><tbody id="hasil"></tbody></table>
+<h2>2. Detail Buku Terpilih</h2><div id="detail" class="box">-</div>
+<h2>3. Data Peminjam</h2><div id="peminjam" class="box">-</div>
+<h2>4. Ketentuan Peminjaman</h2><div id="ketentuan" class="box">-</div>
+<button id="ajukan" disabled onclick="ajukan()">Ajukan Peminjaman</button> <button class="sec" onclick="reset()">Batal</button>
+</div>
+<div id="sukses" style="display:none"></div>
+<script>
+let kode=null;
+const $=id=>document.getElementById(id), api=async(u,o)=>(await fetch('/api/v1'+u,o)).json();
+const fmt=d=>new Date(d).toLocaleDateString('id-ID',{day:'numeric',month:'long',year:'numeric'});
+async function cari(){
+  const r=await api('/buku?q='+encodeURIComponent($('q').value));
+  $('hasil').innerHTML=r.data.map(b=>`<tr><td><input type="radio" name="b" ${b.kodeBuku===kode?'checked':''} onclick="pilihBuku('${b.kodeBuku}')"></td><td>${b.kodeBuku}</td><td>${b.judul}</td><td>${b.penulis}</td><td>${b.statusKetersediaan}</td></tr>`).join('');
+}
+async function pilihBuku(k){
+  if(!k)return; kode=k;
+  const r=(await api(`/peminjaman/validasi?nomorAnggota=${$('akun').value}&kodeBuku=${k}`)).data, b=r.buku, a=r.anggota;
+  $('detail').innerHTML=`<b>${b.judul}</b><br>Kode: ${b.kodeBuku} | Penulis: ${b.penulis}<br>Status: ${b.tersedia?'Tersedia ('+b.stok+' eksemplar)':'Tidak tersedia'}`;
+  $('peminjam').innerHTML=`${a.nama} (${a.nomorAnggota})<br>Status keanggotaan: ${a.statusKeanggotaan}<br>Buku sedang dipinjam: ${a.keteranganPinjaman}`;
+  $('ketentuan').innerHTML=`Tanggal pinjam: ${fmt(r.tanggalPinjam)}<br>Estimasi kembali: ${fmt(r.estimasiTanggalKembali)} (14 hari)`;
+  const bn=$('banner');
+  if(r.dapatDiajukan){bn.className='box ok';bn.textContent='Buku tersedia dan Anda memenuhi syarat peminjaman. Periksa data lalu tekan Ajukan Peminjaman.';}
+  else{bn.className='box err';bn.textContent='Peminjaman tidak dapat diajukan. Alasan: '+r.alasan.map((x,i)=>`(${i+1}) ${x}`).join('; ');}
+  $('ajukan').disabled=!r.dapatDiajukan; cari();
+}
+async function ajukan(){
+  const r=await api('/peminjaman',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({nomorAnggota:$('akun').value,kodeBuku:kode})});
+  if(!r.success){$('banner').className='box err';$('banner').textContent=r.message+': '+(r.errors||[]).join('; ');pilihBuku(kode);return;}
+  const d=r.data;$('main').style.display='none';$('banner').className='box ok';$('banner').textContent='Peminjaman berhasil dicatat. Harap kembalikan buku sebelum tanggal jatuh tempo.';
+  $('sukses').style.display='block';
+  $('sukses').innerHTML=`<div class="box"><b>Informasi Peminjaman</b><br>Nomor Transaksi: ${d.nomorTransaksi}<br>Status: ${d.status}<br>Judul: ${d.judulBuku} (${d.kodeBuku})<br>Peminjam: ${d.peminjam}<br>Sisa kuota: ${d.sisaKuota}<br>Tanggal pinjam: ${fmt(d.tanggalPinjam)}<br>Tanggal pengembalian: ${fmt(d.tanggalKembali)}<br><small>Keterlambatan pengembalian dapat dikenai sanksi sesuai aturan perpustakaan.</small></div><button onclick="location.reload()">Pinjam Buku Lain</button>`;
+}
+function reset(){kode=null;$('q').value='';$('detail').textContent=$('peminjam').textContent=$('ketentuan').textContent='-';$('ajukan').disabled=true;$('banner').className='box';$('banner').textContent='Pilih akun uji, cari buku, lalu pilih satu buku.';cari();}
+cari();
+</script></body></html>

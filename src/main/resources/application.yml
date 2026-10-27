@@ -1,0 +1,30 @@
+server:
+  port: 8080
+spring:
+  application:
+    name: perpustakaan-digital
+  # --- Default: H2 in-memory (langsung jalan tanpa install DB) ---
+  datasource:
+    url: jdbc:h2:mem:perpus_db;DB_CLOSE_DELAY=-1
+    username: sa
+    password:
+    driver-class-name: org.h2.Driver
+  # --- Alternatif PostgreSQL: ganti 3 baris di atas dengan ini ---
+  # datasource:
+  #   url: jdbc:postgresql://localhost:5432/perpus_db
+  #   username: postgres
+  #   password: secretpassword
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: true
+    open-in-view: false
+    defer-datasource-initialization: true
+  sql:
+    init:
+      mode: always
+  h2:
+    console:
+      enabled: true
+perpustakaan:
+  lama-pinjam-hari: 14
